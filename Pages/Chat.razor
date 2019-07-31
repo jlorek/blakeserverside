@@ -1,0 +1,51 @@
+@page "/chat"
+@using BlakeServerSide.Data
+@inject ChatService ChatService
+@inject IdentityService IdentityService
+
+<h1>Chat</h1>
+
+@foreach (var message in ChatService.Messages)
+{
+    <p>@message.TimeStamp | @message.Sender: @message.Text</p>
+}
+
+<div class="input-group mb-3">
+    <!-- https://chrissainty.com/a-detailed-look-at-data-binding-in-blazor/ -->
+<input type="text" class="form-control" @bind-value="@Message" @bind-value:event="oninput" @onkeydown="@HandleReturn"/>
+    <div class="input-group-append">
+        <button class="btn btn-primary" @onclick="@Send">Send</button>
+    </div>
+</div>
+
+
+
+@code {
+    private string Message { get; set;}
+
+    void Send() {
+        if (!string.IsNullOrEmpty(Message))
+        {
+            ChatService.Send(Message, IdentityService.Name);
+            Message =  string.Empty;
+        }
+    }
+
+    protected override void OnInit()
+    {
+        ChatService.Messages.CollectionChanged += (sender, args) => {
+            base.Invoke(StateHasChanged);
+        };
+    }
+
+    void HandleReturn(UIKeyboardEventArgs arg) {
+        Console.WriteLine(arg.Key);
+        if (arg.Key == "Enter") {
+            Send();
+        }
+    }
+
+    protected override void OnAfterRender() {
+
+    }
+}
