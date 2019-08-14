@@ -2,6 +2,9 @@
 
 namespace BlakeServerSide.Data
 {
+    /// <summary>
+    /// 
+    /// </summary>
     public class Issue11159
     {
         private IJSRuntime Js { get; set; }

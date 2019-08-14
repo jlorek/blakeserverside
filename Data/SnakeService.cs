@@ -1,5 +1,4 @@
-﻿using Microsoft.JSInterop;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -12,13 +11,11 @@ namespace BlakeServerSide.Data
         public const int MapSize = 20;
 
         public SnakeTile[,] Screen { get; set; } = new SnakeTile[MapSize, MapSize];
+        public List<SnakePlayer> Snakes { get; set; } = new List<SnakePlayer>();
         public SnakeGameState CurrentState { get; set; } = SnakeGameState.Stop;
-        public int Score { get; set; } = 0;
-        public SnakeDirection NewDirection { get; set; } = SnakeDirection.Right;
-
         public event EventHandler GameLoopExecuted = delegate { };
 
-        private const int GameLoopMs = 250;
+        private const int DefaultGameLoopMs = 250;
 
         private Logger _logger;
 
@@ -36,178 +33,176 @@ namespace BlakeServerSide.Data
         }
 
         private Random _random = new Random();
-        private List<(int, int)> Blocks = new List<(int, int)>();
-        private List<(int, int)> Player = new List<(int, int)>();
+        private List<(int, int)> Level = new List<(int, int)>();
         private (int, int) Apple;
 
         private Timer _gameLoop;
-        private int _gameLoopMs = GameLoopMs;
+        private int _gameLoopMs = DefaultGameLoopMs;
 
-        private SnakeDirection _currentDirection = SnakeDirection.Right;
+        public Guid RegisterNewPlayer()
+        {
+            var player = new SnakePlayer(Snakes.Count * 3);
+            Snakes.Add(player);
+            return player.Id;
+        }
 
-        //protected override async Task OnAfterRenderAsync()
-        //{
-        //    Logger.Info("OnAfterRenderAsync");
-        //    // TEMPORARY: Currently we need this guard to avoid making the interop
-        //    // call during prerendering. Soon this will be unnecessary because we
-        //    // will change OnAfterRenderAsync so that it won't run during the
-        //    // prerendering phase.
-        //    if (!ComponentContext.IsConnected)
-        //    {
-        //        return;
-        //    }
-        //}
+        public void UnregisterPlayer(Guid id)
+        {
+            Snakes.RemoveAll(p => p.Id == id);
+        }
 
         public void StartGame()
         {
             Init();
+            CurrentState = SnakeGameState.Running;
+            _gameLoop.Change(_gameLoopMs, _gameLoopMs);
         }
 
         private void Init()
         {
-            Score = 0;
-            CurrentState = SnakeGameState.Running;
+            _gameLoopMs = DefaultGameLoopMs;
 
-            _gameLoopMs = GameLoopMs;
-            _currentDirection = SnakeDirection.Right;
-            NewDirection = SnakeDirection.Right;
-
-            Blocks.Clear();
+            Level.Clear();
             for (int y = 0; y < MapSize; ++y)
             {
                 for (int x = 0; x < MapSize; ++x)
                 {
                     if (x == 0 || y == 0 || x == MapSize - 1 || y == MapSize - 1)
                     {
-                        Blocks.Add((x, y));
+                        Level.Add((x, y));
                     }
                 }
             }
 
-            Player.Clear();
-            for (int i = 0; i < 5; ++i)
+            foreach (var snake in Snakes)
             {
-                Player.Add((4 + i, 4));
+                snake.Init();
             }
 
-            UpdateApple();
-            StartGameLoop();
+            PlaceApple();
         }
 
-        private void StartGameLoop()
+        public void HandleInput(Guid playerId, SnakeDirection direction)
         {
-            _gameLoop.Change(_gameLoopMs, _gameLoopMs);
-        }
-
-        public string HandleInput(SnakeDirection direction)
-        {
-            NewDirection = direction;
-            return "Thanks from C#!";
+            var player = Snakes.Single(p => p.Id == playerId);
+            player.NewDirection = direction;
         }
 
         private void GameLoop(object _)
         {
-            _logger.Info("Game Loop!");
-
             if (CurrentState != SnakeGameState.Running)
             {
                 return;
             }
 
+            _logger.Info("Game Loop running!");
+
+            UpdateSnakes();
+            UpdateApple();
             UpdateScreen();
 
             GameLoopExecuted(this, EventArgs.Empty);
-            //this.StateHasChanged();
         }
 
         private void UpdateApple()
         {
-            int x = 0;
-            int y = 0;
-            do
+            foreach (var snake in Snakes)
             {
-                x = _random.Next(0, MapSize);
-                y = _random.Next(0, MapSize);
-            } while (Blocks.Contains((x, y)) || Player.Contains((x, y)));
+                if (snake.Body.Contains(Apple))
+                {
+                    snake.Grow();
 
-            Apple = (x, y);
+                    if (Snakes.Sum(s => s.Score) < 20)
+                    {
+                        _gameLoopMs = _gameLoopMs - 10;
+                        _gameLoop.Change(_gameLoopMs, _gameLoopMs);
+                    }
+
+                    PlaceApple();
+                }
+            }
         }
 
-        private void UpdateDirection()
+        private void PlaceApple()
         {
-            if ((_currentDirection == SnakeDirection.Up && NewDirection == SnakeDirection.Down) ||
-                (_currentDirection == SnakeDirection.Down && NewDirection == SnakeDirection.Up) ||
-                (_currentDirection == SnakeDirection.Right && NewDirection == SnakeDirection.Left) ||
-                (_currentDirection == SnakeDirection.Left && NewDirection == SnakeDirection.Right))
+            var newApplePosition = CalculatePossibleApplePosition();
+            if (!newApplePosition.HasValue)
             {
+                CurrentState = SnakeGameState.GameOver;
                 return;
             }
 
-            _currentDirection = NewDirection;
+            Apple = newApplePosition.Value;
+        }
+
+        private (int, int)? CalculatePossibleApplePosition()
+        {
+            List<(int, int)> possiblePositions = new List<(int, int)>();
+            for (int y = 0; y < MapSize; ++y)
+            {
+                for (int x = 0; x < MapSize; ++x)
+                {
+                    possiblePositions.Add((x, y));
+                }
+            }
+
+            possiblePositions.RemoveAll(p => Level.Contains(p));
+            possiblePositions.RemoveAll(p => Snakes.SelectMany(s => s.Body).Contains(p));
+
+            if (possiblePositions.Count == 0)
+            {
+                return null;
+            }
+
+            int possibleIndex = _random.Next(possiblePositions.Count);
+            return possiblePositions[possibleIndex];
+        }
+
+        private void UpdateSnakes()
+        {
+            foreach (var snake in Snakes)
+            {
+                snake.UpdateDirection();
+                var newHead = snake.PeekNewPosition();
+
+                if (Level.Contains(newHead))
+                {
+                    snake.IsAlive = false;
+                    CurrentState = SnakeGameState.GameOver;
+                }
+
+                if (snake.Body.Contains(newHead))
+                {
+                    snake.IsAlive = false;
+                    CurrentState = SnakeGameState.GameOver;
+                }
+
+                snake.UpdatePosition();
+            }
         }
 
         private void UpdateScreen()
         {
-            UpdateDirection();
-
-            // Move Player
-            var (pX, pY) = Player.Last();
-            switch (_currentDirection)
-            {
-                case SnakeDirection.Up:
-                    pY = pY - 1;
-                    break;
-                case SnakeDirection.Down:
-                    pY = pY + 1;
-                    break;
-                case SnakeDirection.Left:
-                    pX = pX - 1;
-                    break;
-                case SnakeDirection.Right:
-                    pX = pX + 1;
-                    break;
-            }
-
-            // Game Logic
-            if (Blocks.Contains((pX, pY)))
-            {
-                CurrentState = SnakeGameState.GameOver;
-            }
-
-            if (Player.Contains((pX, pY)))
-            {
-                CurrentState = SnakeGameState.GameOver;
-            }
-
-            //if (pX < 0) pX = MapSize - 1;
-            //if (pX >= MapSize) pX = 0;
-            //if (pY < 0) pY = MapSize - 1;
-            //if (pY >= MapSize) pY = 0;
-            Player.RemoveAt(0);
-            Player.Add((pX, pY));
-
-            if (Player.Contains(Apple))
-            {
-                Score++;
-                if (Score < 20)
-                {
-                    _gameLoopMs = _gameLoopMs - 10;
-                    _gameLoop.Change(_gameLoopMs, _gameLoopMs);
-                }
-                Player.Insert(0, (pX, pY));
-                UpdateApple();
-            }
-
             // Update Screen
             for (int y = 0; y < MapSize; ++y)
             {
                 for (int x = 0; x < MapSize; ++x)
                 {
-                    if (Player.Contains((x, y)))
+                    Screen[x, y] = SnakeTile.Empty;
+
+                    foreach (var snake in Snakes)
                     {
-                        Screen[x, y] = SnakeTile.Player;
+                        if (snake.Body.Contains((x, y)))
+                        {
+                            Screen[x, y] = SnakeTile.Player;
+                        }
                     }
-                    else if (Blocks.Contains((x, y)))
+
+                    if (Screen[x, y] == SnakeTile.Player)
+                    {
+                        continue;
+                    }
+                    else if (Level.Contains((x, y)))
                     {
                         Screen[x, y] = SnakeTile.Block;
                     }

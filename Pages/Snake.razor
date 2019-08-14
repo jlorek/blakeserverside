@@ -57,20 +57,26 @@
         }
     </div>
     <div id="board">
-        <p>Score: @SnakeService.Score</p>
+        @foreach (var snake in SnakeService.Snakes)
+        {
+            <p>@snake.Name @(snake.IsAlive ? "is alive" : "is dead") and scored @snake.Score</p>
+        }
+
         <p>State: @SnakeService.CurrentState</p>
-        <button class="btn btn-primary" @onclick="@SnakeService.StartGame">Start</button>
+        <button class="btn btn-primary" @onclick="@SnakeService.StartGame">Reset</button>
     </div>
 </div>
 
 @code {
-Dictionary<string[], SnakeDirection> InputMapping = new Dictionary<string[], SnakeDirection>
+private Dictionary<string[], SnakeDirection> _inputMapping = new Dictionary<string[], SnakeDirection>
     {
         { new string[] { "ArrowUp", "KeyW", "w" }, SnakeDirection.Up },
         { new string[] { "ArrowDown", "KeyS", "s" }, SnakeDirection.Down },
         { new string[] { "ArrowLeft", "KeyA", "a" }, SnakeDirection.Left },
         { new string[] { "ArrowRight", "KeyD", "d" }, SnakeDirection.Right }
     };
+
+    private Guid _playerId;
 
 private string ObjectToString(object o)
 {
@@ -81,14 +87,13 @@ protected override void OnInit()
 {
     Logger.Info("OnInit");
     SnakeService.GameLoopExecuted += OnGameLoopExecuted;
-
-    //_gameLoop = new Timer(GameLoop, null, 0, 0);
-    //Init();
+    _playerId = SnakeService.RegisterNewPlayer();
 }
 
 protected override async Task OnInitAsync()
 {
     Logger.Info("OnInitAsync");
+
 }
 
 protected override async Task OnAfterRenderAsync()
@@ -110,11 +115,11 @@ private void OnGameLoopExecuted(object sender, EventArgs args)
 public string HandleInput(string jsKeyCode) {
     Console.WriteLine($"Input: {jsKeyCode}");
 
-    foreach (var kvp in InputMapping)
+    foreach (var kvp in _inputMapping)
     {
         if (kvp.Key.Contains(jsKeyCode))
         {
-            SnakeService.NewDirection = kvp.Value;
+            SnakeService.HandleInput(_playerId, kvp.Value);
             return $"New direction is {kvp.Value}";
         }
     }
