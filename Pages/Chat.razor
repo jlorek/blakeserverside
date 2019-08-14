@@ -7,7 +7,7 @@
 
 @foreach (var message in ChatService.Messages)
 {
-    <p>@message.TimeStamp | @message.Sender: @message.Text</p>
+    <p>@message.TimeStamp.ToString("HH:mm:ss") by @message.Sender: @message.Text</p>
 }
 
 <div class="input-group mb-3">
@@ -39,7 +39,6 @@
     }
 
     void HandleReturn(UIKeyboardEventArgs arg) {
-        Console.WriteLine(arg.Key);
         if (arg.Key == "Enter") {
             Send();
         }

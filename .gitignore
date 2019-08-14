@@ -1,2 +1,5 @@
+/.vs/
 obj
 bin
+debug
+/BlakeServerSide.csproj.user

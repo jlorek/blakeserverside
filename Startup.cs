@@ -27,8 +27,12 @@ namespace BlakeServerSide
         {
             services.AddRazorPages();
             services.AddServerSideBlazor();
+
             services.AddSingleton<WeatherForecastService>();
             services.AddSingleton<ChatService>();
+            services.AddSingleton<SnakeService>();
+            services.AddSingleton<Logger>();
+
             services.AddScoped<IdentityService>();
         }
 

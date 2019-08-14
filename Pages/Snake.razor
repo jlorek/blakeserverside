@@ -1,0 +1,124 @@
+@page "/snake"
+@using BlakeServerSide.Shared;
+@using BlakeServerSide.Data;
+@inject Logger Logger;
+@inject IComponentContext ComponentContext;
+@inject IJSRuntime JsRuntime;
+@inject SnakeService SnakeService;
+
+<style>
+    #container {
+        display: flex;
+        justify-content: space-evenly;
+    }
+    #board {
+        width: 200px;
+    }
+
+    #game {
+        width: calc(@SnakeService.MapSize * @SnakeService.BoxSize * 1px);
+        background: lightblue;
+    }
+
+    #game div {
+        box-sizing: border-box;
+        float: left;
+        width: calc(@SnakeService.BoxSize * 1px);
+        height: calc(@SnakeService.BoxSize * 1px);
+    }
+
+    .empty {
+        border: 1px dotted gray;
+    }
+
+    .block {
+        background: black;
+    }
+
+    .apple {
+        background: red;
+        border-radius: 50%;
+    }
+
+    .player {
+        background: green;
+    }
+</style>
+<h1>Snake</h1>
+
+<div id="container">
+    <div id="game">
+        @for (int y = 0; y < SnakeService.MapSize; ++y)
+        {
+        @for (int x = 0; x < SnakeService.MapSize; ++x)
+            {
+        <div class="@ObjectToString((SnakeService.Screen[x,y]))" />
+            }
+        }
+    </div>
+    <div id="board">
+        <p>Score: @SnakeService.Score</p>
+        <p>State: @SnakeService.CurrentState</p>
+        <button class="btn btn-primary" @onclick="@SnakeService.StartGame">Start</button>
+    </div>
+</div>
+
+@code {
+Dictionary<string[], SnakeDirection> InputMapping = new Dictionary<string[], SnakeDirection>
+    {
+        { new string[] { "ArrowUp", "KeyW", "w" }, SnakeDirection.Up },
+        { new string[] { "ArrowDown", "KeyS", "s" }, SnakeDirection.Down },
+        { new string[] { "ArrowLeft", "KeyA", "a" }, SnakeDirection.Left },
+        { new string[] { "ArrowRight", "KeyD", "d" }, SnakeDirection.Right }
+    };
+
+private string ObjectToString(object o)
+{
+    return Convert.ToString(o).ToLowerInvariant();
+}
+
+protected override void OnInit()
+{
+    Logger.Info("OnInit");
+    SnakeService.GameLoopExecuted += OnGameLoopExecuted;
+
+    //_gameLoop = new Timer(GameLoop, null, 0, 0);
+    //Init();
+}
+
+protected override async Task OnInitAsync()
+{
+    Logger.Info("OnInitAsync");
+}
+
+protected override async Task OnAfterRenderAsync()
+{
+    Logger.Info("OnAfterRenderAsync");
+    // https://github.com/aspnet/AspNetCore/issues/11159
+    Issue11159 fixer = new Issue11159(JsRuntime);
+    var self = fixer.CreateDotNetObjectRef(this);
+    await JsRuntime.InvokeAsync<object>("snakeFunctions.startInputHandler", self);
+}
+
+private void OnGameLoopExecuted(object sender, EventArgs args)
+{
+    Logger.Info("OnGameLoopExecuted");
+    base.Invoke(StateHasChanged);
+}
+
+[JSInvokable]
+public string HandleInput(string jsKeyCode) {
+    Console.WriteLine($"Input: {jsKeyCode}");
+
+    foreach (var kvp in InputMapping)
+    {
+        if (kvp.Key.Contains(jsKeyCode))
+        {
+            SnakeService.NewDirection = kvp.Value;
+            return $"New direction is {kvp.Value}";
+        }
+    }
+
+    return $"Cannot map input '{jsKeyCode}' to any snake direction.";
+}
+}
