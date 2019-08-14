@@ -39,11 +39,36 @@ namespace BlakeServerSide.Data
         private Timer _gameLoop;
         private int _gameLoopMs = DefaultGameLoopMs;
 
-        public Guid RegisterNewPlayer()
+        public Guid? RegisterNewPlayer()
         {
-            var player = new SnakePlayer(Snakes.Count * 3);
+            if (Snakes.Count == 4)
+            {
+                return null;
+            }
+
+            var player = new SnakePlayer(GetNextPlayerTile());
             Snakes.Add(player);
             return player.Id;
+        }
+
+        private SnakeTile GetNextPlayerTile()
+        {
+            if (Snakes.Count == 0)
+            {
+                return SnakeTile.PlayerOne;
+            }
+            else if (Snakes.Count == 1)
+            {
+                return SnakeTile.PlayerTwo;
+            }
+            else if (Snakes.Count == 2)
+            {
+                return SnakeTile.PlayerThree;
+            }
+            else
+            {
+                return SnakeTile.PlayerFour;
+            }
         }
 
         public void UnregisterPlayer(Guid id)
@@ -194,11 +219,11 @@ namespace BlakeServerSide.Data
                     {
                         if (snake.Body.Contains((x, y)))
                         {
-                            Screen[x, y] = SnakeTile.Player;
+                            Screen[x, y] = snake.PlayerTile;
                         }
                     }
 
-                    if (Screen[x, y] == SnakeTile.Player)
+                    if ((int) Screen[x, y] >= (int) SnakeTile.PlayerOne)
                     {
                         continue;
                     }

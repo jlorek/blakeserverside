@@ -5,6 +5,7 @@
 @inject IComponentContext ComponentContext;
 @inject IJSRuntime JsRuntime;
 @inject SnakeService SnakeService;
+@implements  IDisposable;
 
 <style>
     #container {
@@ -12,7 +13,7 @@
         justify-content: space-evenly;
     }
     #board {
-        width: 200px;
+        width: 300px;
     }
 
     #game {
@@ -28,20 +29,37 @@
     }
 
     .empty {
-        border: 1px dotted gray;
+        /*border: 1px dotted LightGray;*/
     }
 
     .block {
-        background: black;
+        background: DarkSlateGrey;
+        border-radius: 20%;
     }
 
     .apple {
-        background: red;
+        background: IndianRed;
         border-radius: 50%;
     }
 
-    .player {
-        background: green;
+    .playerone {
+        background: MediumSeaGreen;
+        opacity: 0.5;
+    }
+
+    .playertwo {
+        background: Olive;
+        opacity: 0.5;
+    }
+
+    .playerthree {
+        background: LightSeaGreen;
+        opacity: 0.5;
+    }
+
+    .playerfour {
+        background: DarkSeaGreen;
+        opacity: 0.5;
     }
 </style>
 <h1>Snake</h1>
@@ -50,9 +68,9 @@
     <div id="game">
         @for (int y = 0; y < SnakeService.MapSize; ++y)
         {
-        @for (int x = 0; x < SnakeService.MapSize; ++x)
+            @for (int x = 0; x < SnakeService.MapSize; ++x)
             {
-        <div class="@ObjectToString((SnakeService.Screen[x,y]))" />
+                <div class="@TileToCss(SnakeService.Screen[x,y])" />
             }
         }
     </div>
@@ -63,7 +81,8 @@
         }
 
         <p>State: @SnakeService.CurrentState</p>
-        <button class="btn btn-primary" @onclick="@SnakeService.StartGame">Reset</button>
+        <button class="btn btn-primary " @onclick="@JoinGame" disabled="@PlayerId.HasValue">Join</button>
+        <button class="btn btn-primary" @onclick="@SnakeService.StartGame" disabled="@(!PlayerId.HasValue)">Reset</button>
     </div>
 </div>
 
@@ -76,18 +95,28 @@ private Dictionary<string[], SnakeDirection> _inputMapping = new Dictionary<stri
         { new string[] { "ArrowRight", "KeyD", "d" }, SnakeDirection.Right }
     };
 
-    private Guid _playerId;
+public Guid? PlayerId { get; set; }
 
-private string ObjectToString(object o)
+private string TileToCss(SnakeTile tile)
 {
-    return Convert.ToString(o).ToLowerInvariant();
+    return Convert.ToString(tile).ToLowerInvariant();
+}
+
+private async Task JoinGame()
+{
+    PlayerId = SnakeService.RegisterNewPlayer();
+
+    if (PlayerId.HasValue)
+    {
+        var self = DotNetObjectRef.Create(this);
+        await JsRuntime.InvokeAsync<object>("snakeFunctions.startInputHandler", self);
+    }
 }
 
 protected override void OnInit()
 {
     Logger.Info("OnInit");
     SnakeService.GameLoopExecuted += OnGameLoopExecuted;
-    _playerId = SnakeService.RegisterNewPlayer();
 }
 
 protected override async Task OnInitAsync()
@@ -100,9 +129,9 @@ protected override async Task OnAfterRenderAsync()
 {
     Logger.Info("OnAfterRenderAsync");
     // https://github.com/aspnet/AspNetCore/issues/11159
-    Issue11159 fixer = new Issue11159(JsRuntime);
-    var self = fixer.CreateDotNetObjectRef(this);
-    await JsRuntime.InvokeAsync<object>("snakeFunctions.startInputHandler", self);
+    //Issue11159 fixer = new Issue11159(JsRuntime);
+    //var self = fixer.CreateDotNetObjectRef(this);
+    //await JsRuntime.InvokeAsync<object>("snakeFunctions.startInputHandler", self);
 }
 
 private void OnGameLoopExecuted(object sender, EventArgs args)
@@ -113,17 +142,23 @@ private void OnGameLoopExecuted(object sender, EventArgs args)
 
 [JSInvokable]
 public string HandleInput(string jsKeyCode) {
-    Console.WriteLine($"Input: {jsKeyCode}");
-
     foreach (var kvp in _inputMapping)
     {
         if (kvp.Key.Contains(jsKeyCode))
         {
-            SnakeService.HandleInput(_playerId, kvp.Value);
+            SnakeService.HandleInput(PlayerId.Value, kvp.Value);
             return $"New direction is {kvp.Value}";
         }
     }
 
     return $"Cannot map input '{jsKeyCode}' to any snake direction.";
+}
+
+public void Dispose()
+{
+    if (PlayerId.HasValue)
+    {
+        SnakeService.UnregisterPlayer(PlayerId.Value);
+    }
 }
 }

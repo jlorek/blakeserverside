@@ -1,6 +1,7 @@
 ﻿using Bogus;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 
 namespace BlakeServerSide.Data
@@ -23,14 +24,16 @@ namespace BlakeServerSide.Data
 
         public SnakeDirection NewDirection { get; set; } = SnakeDirection.Right;
 
+        public SnakeTile PlayerTile { get; set; }
+
         private const int InitialSize = 5;
 
-        private readonly int _startingPositionOffset;
+        private const int WallOffset = 2;
 
-        public SnakePlayer(int startingPositionOffset)
+        public SnakePlayer(SnakeTile playerTile)
         {
             Body = new List<(int, int)> { (0, 0) };
-            _startingPositionOffset = startingPositionOffset;
+            PlayerTile = playerTile;
 
             var faker = new Faker();
             Name = faker.Name.FirstName();
@@ -43,9 +46,38 @@ namespace BlakeServerSide.Data
             IsAlive = true;
 
             Body.Clear();
-            for (int i = 0; i < InitialSize; ++i)
+
+            if (PlayerTile == SnakeTile.PlayerOne)
             {
-                Body.Add((_startingPositionOffset + 2 + i, _startingPositionOffset + 2));
+                for (int i = 0; i < InitialSize; ++i)
+                {
+                    Body.Add((WallOffset + i, WallOffset));
+                }
+                CurrentDirection = NewDirection = SnakeDirection.Right;
+            }
+            else if (PlayerTile == SnakeTile.PlayerTwo)
+            {
+                for (int i = 0; i < InitialSize; ++i)
+                {
+                    Body.Add((SnakeService.MapSize - WallOffset - i - 1, SnakeService.MapSize - WallOffset - 1));
+                }
+                CurrentDirection = NewDirection = SnakeDirection.Left;
+            }
+            else if (PlayerTile == SnakeTile.PlayerThree)
+            {
+                for (int i = 0; i < InitialSize; ++i)
+                {
+                    Body.Add((SnakeService.MapSize - WallOffset - i - 1, WallOffset));
+                }
+                CurrentDirection = NewDirection = SnakeDirection.Left;
+            }
+            else if (PlayerTile == SnakeTile.PlayerFour)
+            {
+                for (int i = 0; i < InitialSize; ++i)
+                {
+                    Body.Add((WallOffset + i, SnakeService.MapSize - WallOffset - 1));
+                }
+                CurrentDirection = NewDirection = SnakeDirection.Right;
             }
         }
 
